@@ -33,6 +33,11 @@ class MiniChessEnv(gym.Env):
         board = np.zeros((4,4), dtype=int)
 
         return board
+    def _get_obs(self):
+        return { "board" : self.board.copy(),
+                 "current_player" : self.current_player
+            }
+    
     def legal_moves(self, r, c):
         piece = self.board[r][c]
         if piece ==1:
@@ -179,34 +184,57 @@ class MiniChessEnv(gym.Env):
                     moves.append((nr, nc))
         return moves
 
-    def step(self, action):
-        if self.done:
-            return copy.deepcopy(self.board), 0, True, False, {}
-        
-        #f = from, t = to,  c = columm, r = row
-        fr, fc, tr, tc = action
-        reward = 0
+    def _compute_reward(self, fr, fc, tr, tc, target_piece, illegal=False):
+        """
+        fr, fc: from position
+        tr, tc: to position
+        target_piece: piece at destination before the move
+        illegal: True if the move is illegal
+        """
+        if illegal:
+            return -0.5
+         
+        reward = 0.0
 
-        piece= self.board[fr, fc]
-
-        if piece == 0 or np.sight(piece) != self.current_player:
-            reward = -0.1 #illegal move
-            return copy.deepcopy(self.board), reward, False, False, {}
-        
-        target_piece = self.board[tr, tc]
-        if target_piece != 0 and np.sign(target_piece) == self.curent_player:
-            reward = -0.1
-            return copy.deepcopy(self.board), reward, False, False, {}
-        
-        self.board[tr, tc] = piece
-        self.board[fr, fc] = 0
-
-        if target_piece == -5 *self.current_player:
+        if target_piece !=0:
+            reward += 0.1
+        if abs(target_piece) == 5:
             reward = 1.0
-            self.done = True
+        
+        piece = self.board[tr][tc]
+        if abs(piece) == 1:
+            direction = -1 if piece > 0 else 1
+            if tr == fr + direction:
+                reward += 0.01
+        return reward 
+
+
+
+    def step(self, action):
+        fr, fc, tr, tc = action
+        piece = self.board[fr][fc]
+
+        if piece == 0 or self._piece_color(piece) != self.current_player:
+            reward = self._compute_reward(fr, fc, tr, tc, target_piece=0, illegal=True)
+            return self._get_obs(), reward, False, False, {"illegal": True}
+                
+        legal = self.legal_moves(fr, fc)
+        if (tr, tc) not in legal:
+            reward = self._compute_reward(fr, fc, tr, tc, target_piece=0, illegal=True)
+            return self._get_obs(), reward, False, False, {"illegal": True}
+        
+        target_piece = self.board[tr][tc]
+        self.board[tr][tc] = piece
+        self.board[fr][fc] = 0
+
+        reward = self._compute_reward(fr, fc, tr, tc, target_piece)
+        done = False
+
+        done = abs(target_piece) == 5
+        
         self.current_player *= -1
 
-        return copy.deepcopy(self.board), reward, self.done, False, {}
+        return self.get_obs(), reward, done, False, {}
     
     def render(self):
         piece_map = {
