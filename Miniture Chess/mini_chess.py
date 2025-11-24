@@ -382,7 +382,7 @@ while not done and steps < max_steps:
     obs, reward, done, truncated, info = env.step(action)
     
     env.render()
-    time.sleep(0.5) # Slow down so you can see what happens
+    time.sleep(1) # Slow down so you can see what happens
 
 if done:
     print("Checkmate / King Captured!")
